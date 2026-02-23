@@ -1,4 +1,6 @@
-using Models.Item;
+using System.ComponentModel.DataAnnotations;
+using Models;
+using dotnet_tutorial.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,63 +21,118 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Configure the HTTP request pipeline.
-
-// Remove HTTPS redirection so you can test with http
-
-// app.UseHttpsRedirection();
-
-// app.UseAuthorization();
-
-var items = new List<Item>{
-    new Item { Name = "Item 1", Description = "Description for Item 1" },
-};
+// Middleware pipeline order (Onion Architecture):
+// 1. Error handling (catches all unhandled exceptions)
+// 2. Authentication (blocks unauthorized requests)
+// 3. Logging (logs all requests and responses)
+app.UseMiddleware<ErrorHandlingMiddleware>();
+app.UseMiddleware<AuthenticationMiddleware>();
+app.UseMiddleware<LoggingMiddleware>();
 
 app.MapControllers();
 
+// In-memory storage using Dictionary for stable IDs after deletion
+var users = new Dictionary<int, User>();
+var nextId = 0;
 
-
-
-app.MapGet("/", () => "Welcome to the Simple Web API!");
-
-app.MapGet("/items", () => items);
-
-app.MapPost("/items", (Item data) =>
+// Helper method to validate an object using data annotations
+List<string> ValidateInput(object input)
 {
-    items.Add(data);
-    return Results.Created($"New item created with id {items.Count - 1}", data);
+    var context = new ValidationContext(input);
+    var results = new List<ValidationResult>();
+    Validator.TryValidateObject(input, context, results, validateAllProperties: true);
+    return results.Select(r => r.ErrorMessage ?? "Validation error.").ToList();
+}
+
+// GET /users — returns paginated list of users
+app.MapGet("/users", (int? page, int? pageSize) =>
+{
+    var p = page ?? 1;
+    var size = pageSize ?? 10;
+
+    if (p < 1) p = 1;
+    if (size < 1) size = 1;
+    if (size > 100) size = 100;
+
+    var totalUsers = users.Count;
+    var pagedUsers = users
+        .OrderBy(kvp => kvp.Key)
+        .Skip((p - 1) * size)
+        .Take(size)
+        .Select(kvp => new { id = kvp.Key, user = kvp.Value })
+        .ToList();
+
+    return Results.Ok(new
+    {
+        page = p,
+        pageSize = size,
+        totalUsers,
+        data = pagedUsers
+    });
 });
 
-
-app.MapGet("/items/{id:int:min(0)}", (int id) =>
+// POST /users — create a new user with validation
+app.MapPost("/users", (UserInput data) =>
 {
-    if (id < 0 || id >= items.Count)
+    var errors = ValidateInput(data);
+    if (errors.Count > 0)
     {
-        return Results.NotFound();
+        return Results.BadRequest(new { errors });
     }
-    var item = items[id];
-    return Results.Ok(item);
+
+    var user = new User
+    {
+        Name = data.Name,
+        Email = data.Email,
+        Password = data.Password,
+        Gender = data.Gender
+    };
+
+    var id = nextId++;
+    users[id] = user;
+    return Results.Created($"/users/{id}", new { id, user });
 });
 
-app.MapPut("/items/{id:int:min(0)}", (int id, Item data) =>
+// GET /users/{id} — retrieve a single user by ID
+app.MapGet("/users/{id:int:min(0)}", (int id) =>
 {
-    if (id < 0 || id >= items.Count)
+    if (!users.ContainsKey(id))
     {
-        return Results.NotFound();
+        return Results.NotFound(new { error = $"User with id {id} not found." });
     }
-    var item = items[id];
-    item.Name = data.Name;
-    item.Description = data.Description;
-    return Results.Ok(item);
+    return Results.Ok(new { id, user = users[id] });
 });
 
-app.MapDelete("/items/{id:int:min(0)}", (int id) =>
+// PUT /users/{id} — update an existing user
+app.MapPut("/users/{id:int:min(0)}", (int id, UserInput data) =>
 {
-    if (id < 0 || id >= items.Count)
+    if (!users.ContainsKey(id))
     {
-        return Results.NotFound();
+        return Results.NotFound(new { error = $"User with id {id} not found." });
     }
-    items.RemoveAt(id);
+
+    var errors = ValidateInput(data);
+    if (errors.Count > 0)
+    {
+        return Results.BadRequest(new { errors });
+    }
+
+    var user = users[id];
+    user.Name = data.Name;
+    user.Email = data.Email;
+    user.Password = data.Password;
+    user.Gender = data.Gender;
+    return Results.Ok(new { id, user });
+});
+
+// DELETE /users/{id} — delete a user by ID
+app.MapDelete("/users/{id:int:min(0)}", (int id) =>
+{
+    if (!users.ContainsKey(id))
+    {
+        return Results.NotFound(new { error = $"User with id {id} not found." });
+    }
+    users.Remove(id);
     return Results.NoContent();
 });
 
