@@ -1,60 +1,56 @@
 using Microsoft.AspNetCore.Mvc;
 // using System.Collections.Generic; // System available by default in latest version
-namespace MyFirstApi.Controllers
+
+[ApiController]
+
+[Route("api/[controller]")] // means the route is based on the controller name (ProductsController → products)
+
+public class ProductsController : ControllerBase
 
 {
 
-    [ApiController]
+    [HttpGet] // maps a method to an HTTP GET request at /api/products
 
-    [Route("api/[controller]")] // means the route is based on the controller name (ProductsController → products)
-
-    public class ProductsController : ControllerBase
+    public ActionResult<List<string>> Get()
 
     {
 
-        [HttpGet] // maps a method to an HTTP GET request at /api/products
+        return new List<string> { "Apple", "Banana", "Orange" };
 
-        public ActionResult<List<string>> Get()
+    }
 
-        {
+    [HttpGet("featured")] // custom route at /api/products/featured
+    public string GetFeaturedProduct() => "Mango";
 
-            return new List<string> { "Apple", "Banana", "Orange" };
+    [HttpPost] // POST
 
-        }
+    public ActionResult<string> Post([FromBody] string newProduct)
 
-        [HttpGet("featured")] // custom route at /api/products/featured
-        public string GetFeaturedProduct() => "Mango";
+    {
 
-        [HttpPost] // POST
+        return $"Added: {newProduct}";
 
-        public ActionResult<string> Post([FromBody] string newProduct)
+    }
 
-        {
+    [HttpPut("{id}")] // PUT
 
-            return $"Added: {newProduct}";
+    public ActionResult<string> Put(int id, [FromBody] string updatedProduct)
 
-        }
+    {
 
-        [HttpPut("{id}")] // PUT
+        return $"Updated product {id} to: {updatedProduct}";
 
-        public ActionResult<string> Put(int id, [FromBody] string updatedProduct)
+    }
 
-        {
+    [HttpDelete("{id}")] // DELETE
 
-            return $"Updated product {id} to: {updatedProduct}";
+    public ActionResult<string> Delete(int id)
 
-        }
+    {
 
-        [HttpDelete("{id}")] // DELETE
-
-        public ActionResult<string> Delete(int id)
-
-        {
-
-            return $"Deleted product with ID: {id}";
-
-        }
+        return $"Deleted product with ID: {id}";
 
     }
 
 }
+

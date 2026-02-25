@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
-namespace Models
+namespace UserManagementAPI.Models
 {
     // DTO for accepting user input (includes password)
     public class UserInput

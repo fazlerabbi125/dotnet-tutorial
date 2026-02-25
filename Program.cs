@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using Models;
-using dotnet_tutorial.Middleware;
+using UserManagementAPI.Models;
+using UserManagementAPI.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
