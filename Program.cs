@@ -1,8 +1,18 @@
 using System.ComponentModel.DataAnnotations;
 using UserManagementAPI.Models;
 using UserManagementAPI.Middleware;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+
+/* Set camelCase format serialization and deserialization for JSON:
+Serialization (response output): C# Name → JSON "name"
+Deserialization (request input): JSON "name" → C# Name
+*/
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+});
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -26,14 +36,15 @@ if (app.Environment.IsDevelopment())
 // 2. Authentication (blocks unauthorized requests)
 // 3. Logging (logs all requests and responses)
 app.UseMiddleware<ErrorHandlingMiddleware>();
-app.UseMiddleware<AuthenticationMiddleware>();
 app.UseMiddleware<LoggingMiddleware>();
 
 app.MapControllers();
 
 // In-memory storage using Dictionary for stable IDs after deletion
-var users = new Dictionary<int, User>();
-var nextId = 0;
+var users = new Dictionary<int, User>
+{
+    { 1, new User { Name = "Alice", Email = "alice@example.com", Password = "password123", Gender = "female" } },
+};
 
 // Helper method to validate an object using data annotations
 List<string> ValidateInput(object input)
@@ -71,7 +82,7 @@ app.MapGet("/users", (int? page, int? pageSize) =>
     });
 });
 
-// POST /users — create a new user with validation
+// POST /users — create a new user with validation (requires auth)
 app.MapPost("/users", (UserInput data) =>
 {
     var errors = ValidateInput(data);
@@ -80,7 +91,7 @@ app.MapPost("/users", (UserInput data) =>
         return Results.BadRequest(new { errors });
     }
 
-    var user = new User
+    var newUser = new User
     {
         Name = data.Name,
         Email = data.Email,
@@ -88,10 +99,10 @@ app.MapPost("/users", (UserInput data) =>
         Gender = data.Gender
     };
 
-    var id = nextId++;
-    users[id] = user;
-    return Results.Created($"/users/{id}", new { id, user });
-});
+    int id = users.Count > 0 ? users.Keys.Max() + 1 : 1; // Get next ID safely
+    users[id] = newUser;
+    return Results.Created($"/users/{id}", new { id, newUser });
+}).AddEndpointFilter<AuthenticationFilter>();
 
 // GET /users/{id} — retrieve a single user by ID
 app.MapGet("/users/{id:int:min(0)}", (int id) =>
@@ -103,7 +114,7 @@ app.MapGet("/users/{id:int:min(0)}", (int id) =>
     return Results.Ok(new { id, user = users[id] });
 });
 
-// PUT /users/{id} — update an existing user
+// PUT /users/{id} — update an existing user (requires auth)
 app.MapPut("/users/{id:int:min(0)}", (int id, UserInput data) =>
 {
     if (!users.ContainsKey(id))
@@ -123,9 +134,9 @@ app.MapPut("/users/{id:int:min(0)}", (int id, UserInput data) =>
     user.Password = data.Password;
     user.Gender = data.Gender;
     return Results.Ok(new { id, user });
-});
+}).AddEndpointFilter<AuthenticationFilter>();
 
-// DELETE /users/{id} — delete a user by ID
+// DELETE /users/{id} — delete a user by ID (requires auth)
 app.MapDelete("/users/{id:int:min(0)}", (int id) =>
 {
     if (!users.ContainsKey(id))
@@ -134,6 +145,6 @@ app.MapDelete("/users/{id:int:min(0)}", (int id) =>
     }
     users.Remove(id);
     return Results.NoContent();
-});
+}).AddEndpointFilter<AuthenticationFilter>();
 
 app.Run();
