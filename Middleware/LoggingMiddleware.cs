@@ -1,4 +1,4 @@
-namespace UserManagementAPI.Middleware;
+namespace DotNetTutorial.Middleware;
 
 public class LoggingMiddleware
 {

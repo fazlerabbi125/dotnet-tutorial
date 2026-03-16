@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace UserManagementAPI.Middleware;
+namespace DotNetTutorial.Middleware;
 
 public class AuthenticationMiddleware
 {
