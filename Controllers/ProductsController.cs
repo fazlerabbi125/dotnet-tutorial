@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 public class ProductsController : ControllerBase
 
 {
+    private static readonly List<string> _products = new List<string> { "Apple", "Banana", "Orange" };
 
     [HttpGet] // maps a method to an HTTP GET request at /api/products
 
@@ -15,40 +16,50 @@ public class ProductsController : ControllerBase
 
     {
 
-        return new List<string> { "Apple", "Banana", "Orange" };
-
+        return Ok(_products);
     }
-
-    [HttpGet("featured")] // custom route at /api/products/featured
-    public string GetFeaturedProduct() => "Mango";
 
     [HttpPost] // POST
 
     public ActionResult<string> Post([FromBody] string newProduct)
 
     {
-
+        _products.Add(newProduct); // Add new product to the list
         return $"Added: {newProduct}";
 
     }
 
-    [HttpPut("{id}")] // PUT
+    [HttpPut("{id:int:min(0)}")] // PUT
 
     public ActionResult<string> Put(int id, [FromBody] string updatedProduct)
 
     {
+        if (id < 0 || id >= _products.Count)
 
+        {
+
+            return NotFound($"Product with ID {id} not found.");
+
+        }
+        _products[id] = updatedProduct;
         return $"Updated product {id} to: {updatedProduct}";
 
     }
 
-    [HttpDelete("{id}")] // DELETE
+    [HttpDelete("{id:int:min(0)}")] // DELETE
 
     public ActionResult<string> Delete(int id)
 
     {
+        if (id < 0 || id >= _products.Count)
 
-        return $"Deleted product with ID: {id}";
+        {
+
+            return NotFound($"Product with ID {id} not found.");
+
+        }
+        _products.RemoveAt(id);
+        return NoContent();
 
     }
 
