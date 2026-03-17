@@ -33,7 +33,8 @@ namespace DotNetTutorial.Tests // Added namespace for good practice
             var maliciousInput = new UserCreateSchema
             {
                 Username = "<script>alert('XSS')</script>",  // Raw payload
-                Email = "attacker@evil.com"
+                Email = "attacker@evil.com",
+                Password = "Password123!"
             };
 
             var errors = DataValidator.ValidateSchema(maliciousInput);
@@ -48,13 +49,14 @@ namespace DotNetTutorial.Tests // Added namespace for good practice
             var schema = new UserCreateSchema
             {
                 Username = "admin' --",  // Raw payload
-                Email = "test@safevault.com"
+                Email = "test@safevault.com",
+                Password = "Password123!"
             };
             var errors = DataValidator.ValidateSchema(schema);
 
             Assert.IsTrue(errors.ContainsKey("Username"), "SQL injection characters should violate the UsernamePattern.");
             // Optional: Ensure no false positives for valid inputs
-            var validSchema = new UserCreateSchema { Username = "admin-user", Email = "test@safevault.com" };
+            var validSchema = new UserCreateSchema { Username = "admin-user", Email = "test@safevault.com", Password = "Password123!" };
             var validErrors = DataValidator.ValidateSchema(validSchema);
             Assert.IsFalse(validErrors.ContainsKey("Username"), "Valid username should pass validation.");
         }

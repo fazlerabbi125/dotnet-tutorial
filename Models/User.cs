@@ -6,7 +6,7 @@ namespace DotNetTutorial.Models
     {
         [Key] // Marks this property as the primary key for database mapping
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public required int UserID { get; set; }
+        public int UserID { get; set; }
 
         [Required(ErrorMessage = "Username is required.")]
         [MinLength(2, ErrorMessage = "Username must be at least 2 characters.")]
@@ -16,5 +16,9 @@ namespace DotNetTutorial.Models
         [Required(ErrorMessage = "Email is required.")]
         [EmailAddress(ErrorMessage = "Invalid email format.")]
         public required string Email { get; set; }
+
+        public string PasswordHash { get; set; } = string.Empty;
+
+        public string Role { get; set; } = "User"; // Default role is "User"
     }
 }
