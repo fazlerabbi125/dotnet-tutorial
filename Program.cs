@@ -1,7 +1,13 @@
-using System.ComponentModel.DataAnnotations; // Annotations for validation attributes
-using DotNetTutorial.Models;
 using DotNetTutorial.Middleware;
 using System.Text.Json;
+using DotNetEnv;
+using Microsoft.Data.Sqlite;
+using DotNetTutorial.Repositories;
+using DotNetTutorial.Validation;
+using DotNetTutorial.Models;
+using Microsoft.AspNetCore.Mvc;
+
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args); // Creates a WebApplicationBuilder 
 
@@ -14,10 +20,15 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 });
 
+string connectionString = $"Data Source={Environment.GetEnvironmentVariable("DB_NAME")}";
+
+DatabaseInitializer.Initialize(connectionString);
+builder.Services.AddScoped(sp => new UserRepository(connectionString));
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi(); // Document name is v1
-builder.Services.AddControllers();
+builder.Services.AddControllers(); // configures the MVC services for the commonly used features with controllers for an API, excluding views/pages
 
 var app = builder.Build(); // creates a WebApplications
 
@@ -40,111 +51,49 @@ app.UseMiddleware<LoggingMiddleware>();
 
 app.MapControllers();
 
-// In-memory storage using Dictionary for stable IDs after deletion
-var users = new Dictionary<int, User>
+app.MapGet("/users", async (UserRepository repo) =>
 {
-    { 1, new User { Name = "Alice", Email = "alice@example.com", Password = "password123", Gender = "female" } },
-};
-
-// Helper method to validate an object using data annotations
-List<string> ValidateInput(object input)
-{
-    var context = new ValidationContext(input);
-    var results = new List<ValidationResult>();
-    Validator.TryValidateObject(input, context, results, validateAllProperties: true);
-    return results.Select(r => r.ErrorMessage ?? "Validation error.").ToList();
-}
-
-// GET /users — returns paginated list of users
-app.MapGet("/users", (int? page, int? pageSize) =>
-{
-    var p = page ?? 1;
-    var size = pageSize ?? 10;
-
-    if (p < 1) p = 1;
-    if (size < 1) size = 1;
-    if (size > 100) size = 100;
-
-    var totalUsers = users.Count;
-    var pagedUsers = users
-        .OrderBy(kvp => kvp.Key)
-        .Skip((p - 1) * size)
-        .Take(size)
-        .Select(kvp => new { id = kvp.Key, user = kvp.Value })
-        .ToList();
-
-    return Results.Ok(new
-    {
-        page = p,
-        pageSize = size,
-        totalUsers,
-        data = pagedUsers
-    });
+    var users = await repo.GetAll();
+    return Results.Ok(users);
 });
 
-// POST /users — create a new user with validation (requires auth)
-app.MapPost("/users", (UserInput data) =>
+app.MapGet("/users/{id}", async (int id, UserRepository repo) =>
 {
-    var errors = ValidateInput(data);
-    if (errors.Count > 0)
+    var user = await repo.GetOne(id);
+    if (user == null)
     {
-        return Results.BadRequest(new { errors });
+        return Results.NotFound(new { error = $"User with id {id} not found." });
     }
+    return Results.Ok(user);
+});
 
-    var newUser = new User
+app.MapPost("/submit", async ([FromForm] string username, [FromForm] string email, UserRepository repo) =>
+{
+    // 1. Manually map form fields to the Schema for validation
+    var data = new UserCreateSchema
     {
-        Name = data.Name,
-        Email = data.Email,
-        Password = data.Password,
-        Gender = data.Gender
+        Username = username,
+        Email = email
     };
 
-    int id = users.Count > 0 ? users.Keys.Max() + 1 : 1; // Get next ID safely
-    users[id] = newUser;
-    return Results.Created($"/users/{id}", new { id, newUser });
-}).AddEndpointFilter<AuthenticationFilter>();
+    // 2. SANITIZATION 
+    data.Username = DataValidator.Sanitize(data.Username);
+    data.Email = DataValidator.Sanitize(data.Email);
 
-// GET /users/{id} — retrieve a single user by ID
-app.MapGet("/users/{id:int:min(0)}", (int id) =>
-{
-    if (!users.ContainsKey(id))
-    {
-        return Results.NotFound(new { error = $"User with id {id} not found." });
-    }
-    return Results.Ok(new { id, user = users[id] });
-});
-
-// PUT /users/{id} — update an existing user (requires auth)
-app.MapPut("/users/{id:int:min(0)}", (int id, UserInput data) =>
-{
-    if (!users.ContainsKey(id))
-    {
-        return Results.NotFound(new { error = $"User with id {id} not found." });
-    }
-
-    var errors = ValidateInput(data);
+    // 3. VALIDATION
+    var errors = DataValidator.ValidateSchema(data);
     if (errors.Count > 0)
     {
+        // For a web form, you might return a View, 
+        // but for this API-style setup, we return the error list.
         return Results.BadRequest(new { errors });
     }
 
-    var user = users[id];
-    user.Name = data.Name;
-    user.Email = data.Email;
-    user.Password = data.Password;
-    user.Gender = data.Gender;
-    return Results.Ok(new { id, user });
-}).AddEndpointFilter<AuthenticationFilter>();
+    // 4. SECURE INSERTION
+    User newUser = await repo.InsertUser(data);
 
-// DELETE /users/{id} — delete a user by ID (requires auth)
-app.MapDelete("/users/{id:int:min(0)}", (int id) =>
-{
-    if (!users.ContainsKey(id))
-    {
-        return Results.NotFound(new { error = $"User with id {id} not found." });
-    }
-    users.Remove(id);
-    return Results.NoContent();
-}).AddEndpointFilter<AuthenticationFilter>();
+    // Redirect or return success
+    return Results.Created($"/users/{newUser.UserID}", new { message = "User created successfully!", id = newUser.UserID });
+});
 
 app.Run();
