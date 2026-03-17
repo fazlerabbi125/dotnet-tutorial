@@ -6,26 +6,6 @@ namespace DotNetTutorial.Tests // Added namespace for good practice
     [TestFixture]
     public class TestInputValidation
     {
-        // [Test]
-        // public void TestSanitization()
-        // {
-        //     // Test XSS prevention: Tags should be stripped
-        //     string xssPayload = "<script>alert('XSS')</script>";
-        //     string sanitizedXSS = DataValidator.Sanitize(xssPayload);
-        //     Assert.AreEqual("", sanitizedXSS, "XSS tags should be completely removed.");
-        //     Assert.IsFalse(sanitizedXSS.Contains("<"), "Sanitized input should not contain HTML tags.");
-
-        //     // Test SQL payload: Should remain unchanged (since Sanitize is for HTML, not SQL)
-        //     string sqlPayload = "admin' --";
-        //     string sanitizedSQL = DataValidator.Sanitize(sqlPayload);
-        //     Assert.AreEqual("admin' --", sanitizedSQL, "SQL characters should not be altered by HTML sanitization.");
-
-        //     // Test benign input: Should be preserved
-        //     string benign = "<b>user</b>name";
-        //     string sanitizedBenign = DataValidator.Sanitize(benign);
-        //     Assert.AreEqual("username", sanitizedBenign, "Benign HTML should be stripped to safe text.");
-        // }
-
         [Test]
         public void TestForXSS()
         {
@@ -59,6 +39,41 @@ namespace DotNetTutorial.Tests // Added namespace for good practice
             var validSchema = new UserCreateSchema { Username = "admin-user", Email = "test@safevault.com", Password = "Password123!" };
             var validErrors = DataValidator.ValidateSchema(validSchema);
             Assert.IsFalse(validErrors.ContainsKey("Username"), "Valid username should pass validation.");
+        }
+
+        [Test]
+        public void TestSanitization()
+        {
+            string maliciousInput = "<script>alert('XSS')</script><b>Hello</b>";
+            // Sanitize should strip tags
+            string sanitized = DataValidator.Sanitize(maliciousInput);
+            
+            Assert.IsFalse(sanitized.Contains("<script>"), "Scripts should be stripped.");
+            Assert.IsFalse(sanitized.Contains("<b>"), "HTML tags should be stripped.");
+            Assert.AreEqual("alert(&#39;XSS&#39;)Hello", sanitized, "Should be stripped and encoded.");
+        }
+
+        [Test]
+        public void TestEncode()
+        {
+            string maliciousInput = "<script>alert('XSS')</script>";
+            string encoded = DataValidator.Encode(maliciousInput);
+            
+            Assert.AreEqual("&lt;script&gt;alert(&#39;XSS&#39;)&lt;/script&gt;", encoded, "Output should be HTML encoded.");
+        }
+        
+        [Test]
+        public void TestRejectsMaliciousChars()
+        {
+            var schema = new UserCreateSchema
+            {
+                Username = "admin' OR '1'='1",
+                Email = "test@example.com",
+                Password = "Password123!"
+            };
+
+            var errors = DataValidator.ValidateSchema(schema);
+            Assert.IsTrue(errors.ContainsKey("Username"), "Malicious SQL characters in username should be rejected by validation.");
         }
     }
 }

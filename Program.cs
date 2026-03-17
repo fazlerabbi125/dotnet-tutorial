@@ -80,7 +80,7 @@ app.MapGet("/users", async (UserRepository repo) =>
 
 app.MapGet("/users/{id}", async (int id, UserRepository repo) =>
 {
-    var user = await repo.GetOne(id);
+    var user = await repo.GetById(id);
     if (user == null)
     {
         return Results.NotFound(new { error = $"User with id {id} not found." });
@@ -90,8 +90,35 @@ app.MapGet("/users/{id}", async (int id, UserRepository repo) =>
 
 app.MapPost("/submit", async ([FromForm] string username, [FromForm] string email, UserRepository repo) =>
 {
-    // ... logic remains same as register/login ...
-    return Results.BadRequest(new { message = "Please use /api/auth/register instead" });
+    // 1. Manually map form fields to the Schema for validation
+    var data = new UserCreateSchema
+    {
+        Username = username,
+        Email = email,
+        Password = string.Empty // No password in web form; use /api/auth/register for authenticated registration
+    };
+
+    // 2. SANITIZATION
+    data.Username = DataValidator.Sanitize(data.Username);
+    data.Email = DataValidator.Sanitize(data.Email);
+
+    // 3. VALIDATION (skip password validation for form submissions)
+    var errors = DataValidator.ValidateSchema(data);
+    errors.Remove("Password"); // Password is not part of the web form
+    if (errors.Count > 0)
+    {
+        return Results.BadRequest(new { errors });
+    }
+
+    // 4. SECURE INSERTION
+    var newUser = new User
+    {
+        Username = data.Username,
+        Email = data.Email
+    };
+    User createdUser = await repo.InsertUser(newUser);
+
+    return Results.Created($"/users/{createdUser.UserID}", new { message = "User created successfully!", id = createdUser.UserID });
 });
 
 app.MapPut("/users/{id}", async (int id, [FromBody] UserUpdateSchema userUpdate, UserRepository repo) =>
@@ -99,7 +126,7 @@ app.MapPut("/users/{id}", async (int id, [FromBody] UserUpdateSchema userUpdate,
     var errors = DataValidator.ValidateSchema(userUpdate);
     if (errors.Count > 0) return Results.BadRequest(errors);
 
-    var existingUser = await repo.GetOne(id);
+    var existingUser = await repo.GetById(id);
     if (existingUser == null) return Results.NotFound(new { error = $"User with id {id} not found." });
 
     if (userUpdate.Username != null && userUpdate.Username != existingUser.Username)
@@ -114,7 +141,7 @@ app.MapPut("/users/{id}", async (int id, [FromBody] UserUpdateSchema userUpdate,
 
 app.MapDelete("/users/{id}", async (int id, UserRepository repo) =>
 {
-    var existingUser = await repo.GetOne(id);
+    var existingUser = await repo.GetById(id);
     if (existingUser == null) return Results.NotFound(new { error = $"User with id {id} not found." });
 
     await repo.DeleteUser(id);

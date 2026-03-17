@@ -77,7 +77,7 @@ namespace DotNetTutorial.Repositories
             return users;
         }
 
-        async public Task<User?> GetOne(int userId, bool includePassword = false)
+        async public Task<User?> GetById(int userId, bool includePassword = false)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
@@ -144,7 +144,7 @@ namespace DotNetTutorial.Repositories
                 command.Parameters.AddWithValue("$email", userUpdate.Email);
             }
 
-            if (setClauses.Count == 0) return await GetOne(userId);
+            if (setClauses.Count == 0) return await GetById(userId);
 
             command.CommandText = $"UPDATE Users SET {string.Join(", ", setClauses)} WHERE UserID = $userId RETURNING UserID, Username, Email, PasswordHash, Role";
             command.Parameters.AddWithValue("$userId", userId);

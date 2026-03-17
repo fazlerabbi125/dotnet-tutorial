@@ -56,5 +56,12 @@ namespace DotNetTutorial.Services
             rng.GetBytes(randomNumber);
             return Convert.ToBase64String(randomNumber);
         }
+
+        public string HashRefreshToken(string token)
+        {
+            using var sha256 = SHA256.Create();
+            var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(token));
+            return Convert.ToBase64String(hashBytes);
+        }
     }
 }

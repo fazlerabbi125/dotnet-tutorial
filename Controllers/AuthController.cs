@@ -54,9 +54,10 @@ namespace DotNetTutorial.Controllers
 
             var accessToken = _authService.GenerateJwtToken(user);
             var rawRefreshToken = _authService.GenerateRefreshToken();
+            var hashedRefreshToken = _authService.HashRefreshToken(rawRefreshToken);
 
-            // Store the new refresh token in its own table
-            await _refreshTokenRepository.Create(user.UserID, rawRefreshToken, DateTime.UtcNow.AddDays(7));
+            // Store the hashed refresh token in its own table
+            await _refreshTokenRepository.Create(user.UserID, hashedRefreshToken, DateTime.UtcNow.AddDays(7));
 
             Response.Cookies.Append("refreshToken", rawRefreshToken, new CookieOptions
             {
@@ -76,21 +77,24 @@ namespace DotNetTutorial.Controllers
             if (string.IsNullOrEmpty(rawRefreshToken))
                 return Unauthorized(new { message = "Refresh token is missing" });
 
+            var hashedRefreshToken = _authService.HashRefreshToken(rawRefreshToken);
+
             // Look up the token in the RefreshTokens table
-            var storedToken = await _refreshTokenRepository.GetByToken(rawRefreshToken);
+            var storedToken = await _refreshTokenRepository.GetByToken(hashedRefreshToken);
             if (storedToken == null || storedToken.IsRevoked || storedToken.ExpiryTime <= DateTime.UtcNow)
                 return Unauthorized(new { message = "Invalid or expired refresh token" });
 
             // Revoke old token (rotation)
-            await _refreshTokenRepository.Revoke(rawRefreshToken);
+            await _refreshTokenRepository.Revoke(hashedRefreshToken);
 
-            var user = await _userRepository.GetOne(storedToken.UserID);
+            var user = await _userRepository.GetById(storedToken.UserID);
             if (user == null) return Unauthorized(new { message = "User not found" });
 
             var newAccessToken = _authService.GenerateJwtToken(user);
             var newRawRefreshToken = _authService.GenerateRefreshToken();
+            var newHashedRefreshToken = _authService.HashRefreshToken(newRawRefreshToken);
 
-            await _refreshTokenRepository.Create(user.UserID, newRawRefreshToken, DateTime.UtcNow.AddDays(7));
+            await _refreshTokenRepository.Create(user.UserID, newHashedRefreshToken, DateTime.UtcNow.AddDays(7));
 
             Response.Cookies.Append("refreshToken", newRawRefreshToken, new CookieOptions
             {

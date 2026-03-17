@@ -36,11 +36,14 @@ namespace DotNetTutorial.Validation
             return errors.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
         }
 
-        // NEW: Sanitization logic to strip potentially harmful scripts
+        // Sanitization logic to strip potentially harmful scripts and HTML
         public static string Sanitize(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
-            return Regex.Replace(input, "<.*?>", string.Empty);
+            // More comprehensive tag stripping
+            string sanitized = Regex.Replace(input, "<[^>]*>", string.Empty);
+            // Also encode to be sure
+            return WebUtility.HtmlEncode(sanitized);
         }
 
         public static string Encode(string value)

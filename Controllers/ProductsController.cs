@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using DotNetTutorial.Validation;
 // using System.Collections.Generic; // System available by default in latest version
 
 [ApiController]
@@ -25,8 +26,7 @@ public class ProductsController : ControllerBase
 
     {
         _products.Add(newProduct); // Add new product to the list
-        return $"Added: {newProduct}";
-
+        return $"Added: {DataValidator.Encode(newProduct)}";
     }
 
     [HttpPut("{id:int:min(0)}")] // PUT
@@ -42,8 +42,7 @@ public class ProductsController : ControllerBase
 
         }
         _products[id] = updatedProduct;
-        return $"Updated product {id} to: {updatedProduct}";
-
+        return $"Updated product {id} to: {DataValidator.Encode(updatedProduct)}";
     }
 
     [HttpDelete("{id:int:min(0)}")] // DELETE
@@ -62,5 +61,4 @@ public class ProductsController : ControllerBase
         return NoContent();
 
     }
-
 }

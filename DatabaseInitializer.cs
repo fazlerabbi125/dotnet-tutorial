@@ -16,24 +16,11 @@ public static class DatabaseInitializer
             UserID INTEGER PRIMARY KEY AUTOINCREMENT,
             Username TEXT NOT NULL,
             Email TEXT NOT NULL,
-            PasswordHash TEXT NOT NULL DEFAULT '',
+            PasswordHash TEXT NOT NULL,
             Role TEXT NOT NULL DEFAULT 'User'
         );
         """;
         cmd.ExecuteNonQuery();
-
-        // Migrate: add missing columns to Users if they don't exist yet
-        foreach (var col in new[] {
-            "PasswordHash TEXT NOT NULL DEFAULT ''",
-            "Role TEXT NOT NULL DEFAULT 'User'"
-        })
-        {
-            try {
-                var colName = col.Split(' ')[0];
-                cmd.CommandText = $"ALTER TABLE Users ADD COLUMN {col};";
-                cmd.ExecuteNonQuery();
-            } catch { }
-        }
 
         // Separate RefreshTokens table
         cmd.CommandText = """
@@ -48,4 +35,4 @@ public static class DatabaseInitializer
         """;
         cmd.ExecuteNonQuery();
     }
-}
+}

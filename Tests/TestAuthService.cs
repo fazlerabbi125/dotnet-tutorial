@@ -70,5 +70,17 @@ namespace DotNetTutorial.Tests
             Assert.IsNotEmpty(refreshToken1, "Refresh token should not be empty");
             Assert.AreNotEqual(refreshToken1, refreshToken2, "Generated refresh tokens should be unique");
         }
+
+        [Test]
+        public void TestRefreshTokenHashing()
+        {
+            string refreshToken = "test_refresh_token";
+            string hash1 = _authService.HashRefreshToken(refreshToken);
+            string hash2 = _authService.HashRefreshToken(refreshToken);
+
+            Assert.IsNotEmpty(hash1, "Hash should not be empty");
+            Assert.AreEqual(hash1, hash2, "Hashing same token should produce same hash");
+            Assert.AreNotEqual(refreshToken, hash1, "Hash should not equal raw token");
+        }
     }
 }
