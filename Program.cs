@@ -1,151 +1,90 @@
-using DotNetTutorial.Middleware;
-using System.Text.Json;
-using System.Text; // Required for Encoding
+using System.Text.Json; // Required for JsonNamingPolicy
+using System.Text; // Required for Encoding.UTF8
 using DotNetEnv;
-using Microsoft.Data.Sqlite;
-using DotNetTutorial.Repositories;
-using DotNetTutorial.Validation;
-using DotNetTutorial.Models;
-using DotNetTutorial.Services; // Required for AuthService
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.Authentication.JwtBearer; // Required for JwtBearerDefaults
 using Microsoft.IdentityModel.Tokens; // Required for TokenValidationParameters, SymmetricSecurityKey
+using TutorialProj.Middleware;
+using TutorialProj.Common;
+using TutorialProj.Models;
+
+// Load environment variables from .env file
 Env.Load();
 
-var builder = WebApplication.CreateBuilder(args); // Creates a WebApplicationBuilder 
+var builder = WebApplication.CreateBuilder(args); // Creates a WebApplicationBuilder
+
+// Register AppConfig as a Singleton (creates one instance for the entire app lifetime)
+var appConfig = new AppConfig();
+builder.Services.AddSingleton(appConfig);
+
+// Replace Identity's default PBKDF2 password hasher with Argon2id.
+builder.Services.Replace(
+    ServiceDescriptor.Scoped<IPasswordHasher<ApplicationUser>, Argon2idPasswordHasher<ApplicationUser>>());
 
 /* Set camelCase format serialization and deserialization for JSON:
 Serialization (response output): C# Name → JSON "name"
 Deserialization (request input): JSON "name" → C# Name
 */
-builder.Services.ConfigureHttpJsonOptions(options =>
+// For Minimal APIs
+// builder.Services.ConfigureHttpJsonOptions(options =>
+// {
+//     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+// });
+
+// MVC controllers
+builder.Services.AddControllers().AddJsonOptions(options =>
 {
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
 });
 
+// Register JWT Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-.AddJwtBearer(jwtOptions =>
-{
-    jwtOptions.TokenValidationParameters = new TokenValidationParameters
+    .AddJwtBearer(jwtOptions =>
     {
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("JWT_SECRET") ?? "fallback_secret_key_needs_to_be_long_enough"))
-    };
-});
+        jwtOptions.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(appConfig.JwtSecret))
+        };
+    });
 
-
-string connectionString = $"Data Source={Environment.GetEnvironmentVariable("DB_NAME")}";
-
-DatabaseInitializer.Initialize(connectionString);
-builder.Services.AddScoped(sp => new UserRepository(connectionString));
-builder.Services.AddScoped(sp => new RefreshTokenRepository(connectionString));
-builder.Services.AddScoped<AuthService>();
-
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi(); // Document name is v1
-builder.Services.AddControllers(); // configures the MVC services for the commonly used features with controllers for an API, excluding views/pages
 builder.Services.AddAuthorization();
+
+// Add In-Memory Caching
+builder.Services.AddMemoryCache();
+
+// Configure OpenAPI/Swagger
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
+
+builder.Services.AddControllers(); // configures the MVC services for the commonly used features with controllers for an API, excluding views/pages
 
 var app = builder.Build(); // creates a WebApplications
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi(); // https://localhost:{port}/openapi/v1.json
+    app.MapOpenApi(); // https://{host}:{port}/openapi/v1.json
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "API V1");
     });
 }
 
-// Middleware pipeline order (Onion Architecture):
-// 1. Error handling (catches all unhandled exceptions)
-// 2. Authentication (blocks unauthorized requests)
-// 3. Authorization (blocks unauthenticated requests or unauthorized roles)
-// 4. Logging (logs all requests and responses)
+// Middleware pipeline order uses Onion Architecture, where the outer layers (like error handling) wrap around the inner layers (like authentication and routing) and inner layers can handle requests or propagate exceptions to the outer layers.
+
 app.UseMiddleware<ErrorHandlingMiddleware>();
+
+// Auth middlewares must come before MapControllers
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseMiddleware<LoggingMiddleware>();
 
+// Map Controller routes
 app.MapControllers();
 
-app.MapGet("/users", async (UserRepository repo) =>
-{
-    var users = await repo.GetAll();
-    return Results.Ok(users);
-});
-
-app.MapGet("/users/{id}", async (int id, UserRepository repo) =>
-{
-    var user = await repo.GetById(id);
-    if (user == null)
-    {
-        return Results.NotFound(new { error = $"User with id {id} not found." });
-    }
-    return Results.Ok(user);
-});
-
-app.MapPost("/submit", async ([FromForm] string username, [FromForm] string email, UserRepository repo) =>
-{
-    // 1. Manually map form fields to the Schema for validation
-    var data = new UserCreateSchema
-    {
-        Username = username,
-        Email = email,
-        Password = string.Empty // No password in web form; use /api/auth/register for authenticated registration
-    };
-
-    // 2. SANITIZATION
-    data.Username = DataValidator.Sanitize(data.Username);
-    data.Email = DataValidator.Sanitize(data.Email);
-
-    // 3. VALIDATION (skip password validation for form submissions)
-    var errors = DataValidator.ValidateSchema(data);
-    errors.Remove("Password"); // Password is not part of the web form
-    if (errors.Count > 0)
-    {
-        return Results.BadRequest(new { errors });
-    }
-
-    // 4. SECURE INSERTION
-    var newUser = new User
-    {
-        Username = data.Username,
-        Email = data.Email
-    };
-    User createdUser = await repo.InsertUser(newUser);
-
-    return Results.Created($"/users/{createdUser.UserID}", new { message = "User created successfully!", id = createdUser.UserID });
-});
-
-app.MapPut("/users/{id}", async (int id, [FromBody] UserUpdateSchema userUpdate, UserRepository repo) =>
-{
-    var errors = DataValidator.ValidateSchema(userUpdate);
-    if (errors.Count > 0) return Results.BadRequest(errors);
-
-    var existingUser = await repo.GetById(id);
-    if (existingUser == null) return Results.NotFound(new { error = $"User with id {id} not found." });
-
-    if (userUpdate.Username != null && userUpdate.Username != existingUser.Username)
-    {
-        var duplicate = await repo.GetByUsername(userUpdate.Username);
-        if (duplicate != null) return Results.Conflict(new { message = "Username already exists" });
-    }
-
-    var updatedUser = await repo.UpdateUser(id, userUpdate);
-    return Results.Ok(updatedUser);
-}).RequireAuthorization(); // Requires any logged-in user
-
-app.MapDelete("/users/{id}", async (int id, UserRepository repo) =>
-{
-    var existingUser = await repo.GetById(id);
-    if (existingUser == null) return Results.NotFound(new { error = $"User with id {id} not found." });
-
-    await repo.DeleteUser(id);
-    return Results.NoContent();
-}).RequireAuthorization(policy => policy.RequireRole("Admin")); // Requires Admin role
-
 app.Run();
+
