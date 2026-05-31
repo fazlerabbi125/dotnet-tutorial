@@ -1,12 +1,13 @@
-# LogiTrack Architecture Summary
+# Project Architecture Summary
 
-This project implements a robust, maintainable backend architecture in .NET 10, combining Domain-Driven Design (DDD) principles with a feature-slice folder structure.
+This project is a .NET 10 Web API organized around domain models, DTOs, repositories, services, controllers, and startup seeding. `Program.cs` configures EF Core with SQLite, ASP.NET Core Identity, JWT bearer authentication, in-memory caching, repositories, services, and the interactive `create-admin` command.
 
 ## 1. System Layers & Organization
 We transitioned from a standard MVC layout to a feature-sliced architecture:
 - **`Models/`**: Contains only the core domain entities (`InventoryItem`, `Order`, `ApplicationUser`) and the `TimeStampMixin`. No Data Transfer Objects (DTOs) exist here.
 - **`dtos/`**: Dedicated models mapping the exact shape of incoming (Create/Update) and outgoing (Response/Summary) data, preventing over-posting and circular JSON references.
-- **`Constants/`**: Centralized application constants including cache keys (via `CacheKeyType` enum) and time-to-live (TTL) durations for improved maintainability and type safety.
+- **`Constants/`**: Application constants live in `Constants.cs`. Cache keys and cache TTL profiles are represented with enums and mapped through helper methods. Inventory and order caches are invalidated after create, update, and delete operations so list/detail reads do not serve stale data.
+
 - **`Commands/`**: Contains command handlers such as `CreateAdminUserCommand` for user management operations with validation and error handling.
 - **`Repositories/`**: Abstracts EF Core logic. We use a generic `IRepository<T>` interface offering immense flexibility—the service layer can pass optional `Expression<Func<T, bool>>` filters or `Include` delegates without leaking `IQueryable` (which violates the repository pattern).
 - **`Services/`**: Grouped by feature (`Inventory`, `Orders`, `Auth`). Each feature slice contains its specific Interface, Service implementation, and Controller. The Service handles all business logic, caching, and DTO mapping, keeping the Controller extremely thin.
@@ -22,7 +23,7 @@ We transitioned from a standard MVC layout to a feature-sliced architecture:
 - **Identity Core**: By registering `.AddIdentityCore<ApplicationUser>()` instead of `.AddIdentity()`, we avoid the framework silently injecting Cookie authentication as the default scheme.
 - **Role-Based Access Control (RBAC)**: Mutating endpoints are guarded by `[Authorize]`. Deletion specifically requires `[Authorize(Roles = "Manager")]`.
 - **Safe JWT Claims**: JWT claims now use null-coalescing operators to prevent null reference exceptions when building tokens.
-- **Admin User Management**: Admin users can be created via the `CreateAdminUserCommand` with interactive validation of email and password, or configured via `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables.
+- **Admin User Management**: Authentication uses Identity users and role-based authorization with centralized `AppRoles` constants. The `dotnet run -- create-admin` command prompts for admin email/password, validates input, ensures the Manager role exists, and creates the admin user without hardcoded credentials. Optional `ADMIN_EMAIL` and `ADMIN_PASSWORD` environment variables are still supported for first-run automatic seeding.
 
 ## 4. Performance Optimizations
 - **Caching with Constants**: The `InventoryService` utilizes `IMemoryCache` with cache keys defined in `CacheConstants.CacheKeyType` enum and TTL values in `CacheTtl` class. This prevents magic strings and makes cache configuration type-safe.
@@ -68,12 +69,6 @@ The project was built over two distinct migrations to demonstrate an evolutionar
 - **API Endpoints**: Added PUT endpoints for updating both Inventory and Order resources with Manager role authorization
 - **DTO Validation**: Enhanced `CreateOrderDto` to require at least one item and added descriptive error messages
 
-### DisplayInfo() Implementation:
-The `InventoryItem.DisplayInfo()` method is utilized throughout the application:
-- Called during database seeding to log newly created items
-- Available for use in controllers and services when needed for debugging or logging
-- Uses the standard .NET logging infrastructure when appropriate
-
 ### Code Organization:
 - New `Constants/` folder for application-wide constants
 - New `Commands/` folder for command handlers and business operations
@@ -93,4 +88,3 @@ Example environment variables:
 set ADMIN_EMAIL=admin@example.com
 set ADMIN_PASSWORD=YourSecurePassword@123
 ```
-

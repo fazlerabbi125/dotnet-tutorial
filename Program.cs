@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text;
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +13,8 @@ using Microsoft.AspNetCore.Identity;
 using TutorialProj.Models;
 using TutorialProj.Services.Auth;
 using TutorialProj.Data;
+using TutorialProj.Commands;
+using TutorialProj.Constants;
 
 // Load environment variables from .env file
 Env.Load();
@@ -76,11 +77,25 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<CreateAdminUserCommand>();
 
 // Configure OpenAPI/Swagger
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+var isCreateAdminCommand = args.Any(arg =>
+    string.Equals(arg, AppCommands.CreateAdmin, StringComparison.OrdinalIgnoreCase));
+
+if (isCreateAdminCommand)
+{
+    await DbSeeder.SeedAsync(app.Services, seedAdminFromEnvironment: false);
+
+    using var scope = app.Services.CreateScope();
+    var createAdminUserCommand = scope.ServiceProvider.GetRequiredService<CreateAdminUserCommand>();
+    await createAdminUserCommand.ExecuteAsync();
+    return;
+}
 
 // Run Database Seeder
 await DbSeeder.SeedAsync(app.Services);

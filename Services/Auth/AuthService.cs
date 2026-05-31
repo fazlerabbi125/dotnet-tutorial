@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TutorialProj.Dtos.Auth;
 using TutorialProj.Models;
+using TutorialProj.Constants;
 
 namespace TutorialProj.Services.Auth;
 
@@ -40,7 +41,7 @@ public class AuthService : IAuthService
             // If this is the first user ever registered, make them a Manager.
             // Otherwise, make them a regular User.
             var userCount = await _userManager.Users.CountAsync();
-            var role = userCount <= 1 ? "Manager" : "User";
+            var role = userCount <= 1 ? AppRoles.Manager : AppRoles.User;
 
             await _userManager.AddToRoleAsync(user, role);
         }
