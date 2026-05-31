@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace DotNetTutorial.Middleware;
+namespace TutorialProj.Middleware;
 
 public class ErrorHandlingMiddleware
 {

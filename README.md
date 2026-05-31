@@ -7,3 +7,18 @@ Modern .NET projects are associated with a project software development kit (SDK
 
 
 Use NuGet for installing packages
+
+
+Overview and Features of EF Core
+EF Core: EF Core is an open-source ORM tool in the .NET ecosystem. It enables developers to interact with relational databases using C# objects, simplifying code by eliminating direct SQL queries.
+
+Key Features of EF Core:
+
+LINQ (Language Integrated Query): Integrates query capabilities directly into C# code, making queries type-safe and readable.
+
+Database Migrations: Allows the database schema to evolve alongside application development, supporting changes like table additions or modifications.
+
+Change Tracking: Automatically tracks changes made to objects, streamlining updating the database when data changes.
+
+Advantages of EF Core EF Core offers ease of use, flexibility, and maintainability. It enables database interactions through C# objects, reducing SQL complexity, supporting multiple databases (such as SQL Server, PostgreSQL, and SQLite), and improving scalability.
+https://learn.microsoft.com/en-us/ef/core/
