@@ -4,6 +4,8 @@ public sealed class AppConfig
     public string JwtSecret { get; }
     public string Env { get; }
     public int JwtExpiryInMinutes { get; }
+    public string? AdminEmail { get; }
+    public string? AdminPassword { get; }
 
     public AppConfig()
     {
@@ -14,6 +16,8 @@ public sealed class AppConfig
             ?? "Development";
 
         JwtExpiryInMinutes = GetOptionalInt("JWT_EXPIRY_MINUTES", 60);
+        AdminEmail = GetOptional("ADMIN_EMAIL");
+        AdminPassword = GetOptional("ADMIN_PASSWORD");
     }
 
     private static string GetRequired(string key)
@@ -25,6 +29,11 @@ public sealed class AppConfig
                 $"Missing required environment variable: {key}");
 
         return value;
+    }
+
+    private static string? GetOptional(string key)
+    {
+        return System.Environment.GetEnvironmentVariable(key);
     }
 
     private static int GetOptionalInt(string key, int defaultValue)

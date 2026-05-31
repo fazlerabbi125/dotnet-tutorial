@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using TutorialProj.Constants;
 using TutorialProj.Dtos.Inventory;
 using TutorialProj.Models;
 using TutorialProj.Repositories.Interfaces;
@@ -9,7 +10,6 @@ public class InventoryService : IInventoryService
 {
     private readonly IInventoryRepository _repository;
     private readonly IMemoryCache _cache;
-    private const string CacheKey = "inventory_list";
 
     // Dependency Injection (DI) passes the repository and cache to the service.
     // https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection
@@ -22,7 +22,8 @@ public class InventoryService : IInventoryService
     public async Task<IEnumerable<InventoryItemDto>> GetAllAsync()
     {
         // 1. Try to get the list from the in-memory cache first
-        if (!_cache.TryGetValue(CacheKey, out IEnumerable<InventoryItemDto>? cachedList))
+        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
+        if (!_cache.TryGetValue(cacheKey, out IEnumerable<InventoryItemDto>? cachedList))
         {
             // 2. If not in cache, query the database using the repository
             // AsNoTracking is used for performance since we only read the data.
@@ -38,11 +39,8 @@ public class InventoryService : IInventoryService
                 OrderId = i.OrderId
             }).ToList();
 
-            // 3. Store the result in cache for 30 seconds
-            var cacheOptions = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(TimeSpan.FromSeconds(30));
-            
-            _cache.Set(CacheKey, cachedList, cacheOptions);
+            // 3. Store the result in cache with TTL
+            _cache.Set(cacheKey, cachedList, CacheTtl.InventoryListTtl);
         }
 
         return cachedList!;
@@ -51,7 +49,7 @@ public class InventoryService : IInventoryService
     public async Task<InventoryItemDto?> GetByIdAsync(int id)
     {
         var item = await _repository.FindByIdAsync(id);
-        
+
         if (item == null) return null;
 
         return new InventoryItemDto
@@ -77,7 +75,8 @@ public class InventoryService : IInventoryService
         await _repository.SaveAsync();
 
         // Invalidate cache since we added a new item
-        _cache.Remove(CacheKey);
+        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
+        _cache.Remove(cacheKey);
 
         return new InventoryItemDto
         {
@@ -92,15 +91,49 @@ public class InventoryService : IInventoryService
     public async Task<bool> DeleteAsync(int id)
     {
         var entity = await _repository.FindByIdAsync(id);
-        
+
         if (entity == null) return false;
 
         _repository.Delete(entity);
         await _repository.SaveAsync();
 
         // Invalidate cache
-        _cache.Remove(CacheKey);
-        
+        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
+        _cache.Remove(cacheKey);
+
         return true;
+    }
+
+    public async Task<InventoryItemDto?> UpdateAsync(int id, UpdateInventoryItemDto dto)
+    {
+        var entity = await _repository.FindByIdAsync(id);
+
+        if (entity == null) return null;
+
+        // Update only provided fields
+        if (!string.IsNullOrWhiteSpace(dto.Name))
+            entity.Name = dto.Name;
+
+        if (dto.Quantity.HasValue)
+            entity.Quantity = dto.Quantity.Value;
+
+        if (dto.Location != null)
+            entity.Location = dto.Location;
+
+        _repository.Update(entity);
+        await _repository.SaveAsync();
+
+        // Invalidate cache
+        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
+        _cache.Remove(cacheKey);
+
+        return new InventoryItemDto
+        {
+            ItemId = entity.ItemId,
+            Name = entity.Name,
+            Quantity = entity.Quantity,
+            Location = entity.Location,
+            OrderId = entity.OrderId
+        };
     }
 }

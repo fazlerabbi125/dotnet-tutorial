@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using TutorialProj.Models;
 
 namespace TutorialProj.Data;
@@ -12,55 +13,108 @@ public static class DbSeeder
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
 
-        // 1. Apply any pending EF Core migrations automatically
-        await context.Database.MigrateAsync();
-
-        // 2. Add test inventory item if none exist
-        if (!await context.InventoryItems.AnyAsync())
+        try
         {
-            var item = new InventoryItem
-            {
-                Name = "Pallet Jack",
-                Quantity = 12,
-                Location = "Warehouse A"
-            };
-            
-            await context.InventoryItems.AddAsync(item);
-            await context.SaveChangesAsync();
-            
-            // Console output to confirm it worked as requested in Step 5
-            item.DisplayInfo();
+            // 1. Apply any pending EF Core migrations automatically
+            logger.LogInformation("Applying database migrations...");
+            await context.Database.MigrateAsync();
+            logger.LogInformation("Database migrations completed successfully");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Database migration failed");
+            throw;
         }
 
-        // 3. Seed Roles and Admin user for Identity
-        var roleManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<Microsoft.AspNetCore.Identity.IdentityRole>>();
-        var userManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>>();
-
-        string[] roleNames = { "Manager", "User" };
-        foreach (var roleName in roleNames)
+        try
         {
-            if (!await roleManager.RoleExistsAsync(roleName))
+            // 2. Add test inventory item if none exist
+            if (!await context.InventoryItems.AnyAsync())
             {
-                await roleManager.CreateAsync(new Microsoft.AspNetCore.Identity.IdentityRole(roleName));
+                var item = new InventoryItem
+                {
+                    Name = "Pallet Jack",
+                    Quantity = 12,
+                    Location = "Warehouse A"
+                };
+
+                await context.InventoryItems.AddAsync(item);
+                await context.SaveChangesAsync();
+
+                logger.LogInformation("Test inventory item created: Pallet Jack");
             }
         }
-
-        var adminEmail = "admin@logitrack.com";
-        var adminUser = await userManager.FindByEmailAsync(adminEmail);
-
-        if (adminUser == null)
+        catch (Exception ex)
         {
-            var admin = new ApplicationUser
+            logger.LogError(ex, "Failed to seed inventory items");
+            throw;
+        }
+
+        try
+        {
+            // 3. Seed Roles for Identity
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+            string[] roleNames = { "Manager", "User" };
+            foreach (var roleName in roleNames)
             {
-                UserName = adminEmail,
-                Email = adminEmail
-            };
-            var result = await userManager.CreateAsync(admin, "Admin@123");
-            if (result.Succeeded)
-            {
-                await userManager.AddToRoleAsync(admin, "Manager");
+                if (!await roleManager.RoleExistsAsync(roleName))
+                {
+                    await roleManager.CreateAsync(new IdentityRole(roleName));
+                    logger.LogInformation("Role '{Role}' created", roleName);
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to seed roles");
+            throw;
+        }
+
+        try
+        {
+            // 4. Seed default admin user from environment variables
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var config = scope.ServiceProvider.GetRequiredService<AppConfig>();
+
+            // Check if any admin users exist
+            if (!await userManager.Users.AnyAsync())
+            {
+                var adminEmail = config.AdminEmail;
+                var adminPassword = config.AdminPassword;
+
+                if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
+                {
+                    logger.LogWarning("Admin credentials not configured in environment. Run admin user creation command to create one.");
+                }
+                else
+                {
+                    var admin = new ApplicationUser
+                    {
+                        UserName = adminEmail,
+                        Email = adminEmail
+                    };
+
+                    var result = await userManager.CreateAsync(admin, adminPassword);
+                    if (result.Succeeded)
+                    {
+                        await userManager.AddToRoleAsync(admin, "Manager");
+                        logger.LogInformation("Default admin user created: {Email}", adminEmail);
+                    }
+                    else
+                    {
+                        logger.LogError("Failed to create default admin user. Errors: {Errors}",
+                            string.Join(", ", result.Errors.Select(e => e.Description)));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to seed admin user");
+            throw;
         }
     }
 }

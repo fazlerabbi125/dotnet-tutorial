@@ -28,12 +28,12 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult<InventoryItemDto>> GetById(int id)
     {
         var item = await _service.GetByIdAsync(id);
-        
+
         if (item == null)
         {
             return NotFound(new { error = $"Inventory item with ID {id} not found." });
         }
-        
+
         return Ok(item);
     }
 
@@ -43,7 +43,7 @@ public class InventoryController : ControllerBase
     public async Task<ActionResult<InventoryItemDto>> Create([FromBody] CreateInventoryItemDto dto)
     {
         var createdItem = await _service.CreateAsync(dto);
-        
+
         // CreatedAtAction returns a 201 status code and a Location header pointing to the GetById action
         return CreatedAtAction(nameof(GetById), new { id = createdItem.ItemId }, createdItem);
     }
@@ -54,12 +54,27 @@ public class InventoryController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var deleted = await _service.DeleteAsync(id);
-        
+
         if (!deleted)
         {
             return NotFound(new { error = $"Inventory item with ID {id} not found." });
         }
-        
+
         return NoContent(); // 204 No Content is standard for a successful DELETE
+    }
+
+    [HttpPut("{id}")]
+    // Ensures only authenticated users with the "Manager" role can access this endpoint
+    [Authorize(Roles = "Manager")]
+    public async Task<ActionResult<InventoryItemDto>> Update(int id, [FromBody] UpdateInventoryItemDto dto)
+    {
+        var updatedItem = await _service.UpdateAsync(id, dto);
+
+        if (updatedItem == null)
+        {
+            return NotFound(new { error = $"Inventory item with ID {id} not found." });
+        }
+
+        return Ok(updatedItem);
     }
 }

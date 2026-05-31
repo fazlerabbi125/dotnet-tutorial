@@ -18,7 +18,7 @@ using TutorialProj.Data;
 // Load environment variables from .env file
 Env.Load();
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args); // Creates a WebApplicationBuilder
 
 // Register AppConfig as a Singleton (creates one instance for the entire app lifetime)
 var appConfig = new AppConfig();
@@ -38,16 +38,17 @@ builder.Services.AddIdentityCore<ApplicationUser>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-// Configure JSON serialization (camelCase, prevent circular reference errors)
+/* Set camelCase format serialization and deserialization for JSON:
+Serialization (response output): C# Name → JSON "name"
+Deserialization (request input): JSON "name" → C# Name
+*/
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
 });
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
 });
 
 // Register JWT Authentication

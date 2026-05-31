@@ -108,4 +108,36 @@ public class OrderService : IOrderService
 
         return true;
     }
+
+    public async Task<OrderDetailDto?> UpdateAsync(int id, UpdateOrderDto dto)
+    {
+        var order = await _repository.FindWithItemsAsync(id);
+
+        if (order == null) return null;
+
+        // Update only provided fields
+        if (!string.IsNullOrWhiteSpace(dto.CustomerName))
+            order.CustomerName = dto.CustomerName;
+
+        if (dto.DatePlaced.HasValue)
+            order.DatePlaced = dto.DatePlaced.Value;
+
+        _repository.Update(order);
+        await _repository.SaveAsync();
+
+        return new OrderDetailDto
+        {
+            OrderId = order.OrderId,
+            CustomerName = order.CustomerName,
+            DatePlaced = order.DatePlaced,
+            Items = order.Items.Select(i => new InventoryItemDto
+            {
+                ItemId = i.ItemId,
+                Name = i.Name,
+                Quantity = i.Quantity,
+                Location = i.Location,
+                OrderId = i.OrderId
+            }).ToList()
+        };
+    }
 }

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TutorialProj.Dtos.Auth;
 using TutorialProj.Models;
@@ -38,9 +39,9 @@ public class AuthService : IAuthService
         {
             // If this is the first user ever registered, make them a Manager.
             // Otherwise, make them a regular User.
-            var hasUsers = _userManager.Users.Any();
-            var role = !hasUsers || _userManager.Users.Count() == 1 ? "Manager" : "User";
-            
+            var userCount = await _userManager.Users.CountAsync();
+            var role = userCount <= 1 ? "Manager" : "User";
+
             await _userManager.AddToRoleAsync(user, role);
         }
 
@@ -62,8 +63,8 @@ public class AuthService : IAuthService
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Name, user.UserName!),
-            new Claim(ClaimTypes.Email, user.Email!)
+            new Claim(ClaimTypes.Name, user.UserName ?? "unknown"),
+            new Claim(ClaimTypes.Email, user.Email ?? "unknown")
         };
 
         foreach (var role in roles)
@@ -73,9 +74,9 @@ public class AuthService : IAuthService
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config.JwtSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        
+
         var token = new JwtSecurityToken(
-            issuer: null, // Depending on requirements, you can add Issuer and Audience
+            issuer: null,
             audience: null,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(_config.JwtExpiryInMinutes),
