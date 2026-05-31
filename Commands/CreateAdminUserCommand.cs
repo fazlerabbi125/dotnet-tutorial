@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Identity;
+using TutorialProj.Constants;
 using TutorialProj.Models;
 
 namespace TutorialProj.Commands;
@@ -10,13 +11,16 @@ namespace TutorialProj.Commands;
 public class CreateAdminUserCommand
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
     private readonly ILogger<CreateAdminUserCommand> _logger;
 
     public CreateAdminUserCommand(
         UserManager<ApplicationUser> userManager,
+        RoleManager<IdentityRole> roleManager,
         ILogger<CreateAdminUserCommand> logger)
     {
         _userManager = userManager;
+        _roleManager = roleManager;
         _logger = logger;
     }
 
@@ -27,21 +31,27 @@ public class CreateAdminUserCommand
     {
         Console.WriteLine("\n=== Create Admin User ===\n");
 
-        // Get and validate email
-        string email = GetValidatedEmail();
+        var email = GetValidatedEmail();
 
-        // Check if user already exists
         var existingUser = await _userManager.FindByEmailAsync(email);
         if (existingUser != null)
         {
-            Console.WriteLine($"❌ User with email '{email}' already exists.");
+            Console.WriteLine($"User with email '{email}' already exists.");
             return;
         }
 
-        // Get and validate password
-        string password = GetValidatedPassword();
+        var password = GetValidatedPassword();
 
-        // Create the user
+        if (!await _roleManager.RoleExistsAsync(AppRoles.Manager))
+        {
+            var roleResult = await _roleManager.CreateAsync(new IdentityRole(AppRoles.Manager));
+            if (!roleResult.Succeeded)
+            {
+                PrintIdentityErrors("Failed to create Manager role", roleResult);
+                return;
+            }
+        }
+
         var adminUser = new ApplicationUser
         {
             UserName = email,
@@ -52,64 +62,47 @@ public class CreateAdminUserCommand
 
         if (!result.Succeeded)
         {
-            Console.WriteLine("❌ Failed to create user:");
-            foreach (var error in result.Errors)
-            {
-                Console.WriteLine($"  - {error.Description}");
-            }
-            _logger.LogError("Failed to create admin user: {Errors}",
-                string.Join(", ", result.Errors.Select(e => e.Description)));
+            PrintIdentityErrors("Failed to create admin user", result);
             return;
         }
 
-        // Assign Manager role
-        var roleResult = await _userManager.AddToRoleAsync(adminUser, "Manager");
+        var addRoleResult = await _userManager.AddToRoleAsync(adminUser, AppRoles.Manager);
 
-        if (!roleResult.Succeeded)
+        if (!addRoleResult.Succeeded)
         {
-            Console.WriteLine("❌ Failed to assign Manager role:");
-            foreach (var error in roleResult.Errors)
-            {
-                Console.WriteLine($"  - {error.Description}");
-            }
-            _logger.LogError("Failed to assign Manager role to admin user: {Errors}",
-                string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+            PrintIdentityErrors("Failed to assign Manager role", addRoleResult);
             return;
         }
 
-        Console.WriteLine($"✅ Admin user created successfully!");
+        Console.WriteLine("Admin user created successfully!");
         Console.WriteLine($"   Email: {email}");
-        Console.WriteLine($"   Role: Manager\n");
+        Console.WriteLine($"   Role: {AppRoles.Manager}\n");
         _logger.LogInformation("Admin user created: {Email}", email);
     }
 
-    /// <summary>
-    /// Prompts user for email and validates it.
-    /// </summary>
     private static string GetValidatedEmail()
     {
         while (true)
         {
             Console.Write("Enter email address: ");
-            string? email = Console.ReadLine()?.Trim();
+            var email = Console.ReadLine()?.Trim();
 
             if (string.IsNullOrWhiteSpace(email))
             {
-                Console.WriteLine("❌ Email cannot be empty. Please try again.");
+                Console.WriteLine("Email cannot be empty. Please try again.");
                 continue;
             }
 
-            // Validate email format
             var emailValidator = new EmailAddressAttribute();
             if (!emailValidator.IsValid(email))
             {
-                Console.WriteLine("❌ Invalid email format. Please try again.");
+                Console.WriteLine("Invalid email format. Please try again.");
                 continue;
             }
 
             if (email.Length > 256)
             {
-                Console.WriteLine("❌ Email is too long (max 256 characters). Please try again.");
+                Console.WriteLine("Email is too long (max 256 characters). Please try again.");
                 continue;
             }
 
@@ -117,45 +110,53 @@ public class CreateAdminUserCommand
         }
     }
 
-    /// <summary>
-    /// Prompts user for password and validates it.
-    /// </summary>
     private static string GetValidatedPassword()
     {
         while (true)
         {
             Console.Write("Enter password (min 6 characters): ");
-            string? password = Console.ReadLine();
+            var password = Console.ReadLine();
 
             if (string.IsNullOrWhiteSpace(password))
             {
-                Console.WriteLine("❌ Password cannot be empty. Please try again.");
+                Console.WriteLine("Password cannot be empty. Please try again.");
                 continue;
             }
 
             if (password.Length < 6)
             {
-                Console.WriteLine("❌ Password must be at least 6 characters. Please try again.");
+                Console.WriteLine("Password must be at least 6 characters. Please try again.");
                 continue;
             }
 
             if (password.Length > 128)
             {
-                Console.WriteLine("❌ Password is too long (max 128 characters). Please try again.");
+                Console.WriteLine("Password is too long (max 128 characters). Please try again.");
                 continue;
             }
 
-            // Confirm password
             Console.Write("Confirm password: ");
-            string? confirmPassword = Console.ReadLine();
+            var confirmPassword = Console.ReadLine();
 
             if (password != confirmPassword)
             {
-                Console.WriteLine("❌ Passwords do not match. Please try again.");
+                Console.WriteLine("Passwords do not match. Please try again.");
                 continue;
             }
 
             return password;
         }
+    }
+
+    private void PrintIdentityErrors(string message, IdentityResult result)
+    {
+        Console.WriteLine(message + ":");
+        foreach (var error in result.Errors)
+        {
+            Console.WriteLine($"  - {error.Description}");
+        }
+
+        _logger.LogError("{Message}: {Errors}", message,
+            string.Join(", ", result.Errors.Select(e => e.Description)));
     }
 }

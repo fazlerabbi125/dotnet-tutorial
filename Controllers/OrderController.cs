@@ -47,7 +47,7 @@ public class OrderController : ControllerBase
 
     [HttpDelete("{id}")]
     // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
     public async Task<IActionResult> Delete(int id)
     {
         var deleted = await _service.DeleteAsync(id);
@@ -62,7 +62,7 @@ public class OrderController : ControllerBase
 
     [HttpPut("{id}")]
     // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
     public async Task<ActionResult<OrderDetailDto>> Update(int id, [FromBody] UpdateOrderDto dto)
     {
         var updatedOrder = await _service.UpdateAsync(id, dto);

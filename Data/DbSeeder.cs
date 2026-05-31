@@ -1,5 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using TutorialProj.Constants;
 using TutorialProj.Models;
 
 namespace TutorialProj.Data;
@@ -9,7 +10,7 @@ namespace TutorialProj.Data;
 /// </summary>
 public static class DbSeeder
 {
-    public static async Task SeedAsync(IServiceProvider serviceProvider)
+    public static async Task SeedAsync(IServiceProvider serviceProvider, bool seedAdminFromEnvironment = true)
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -43,7 +44,8 @@ public static class DbSeeder
                 await context.InventoryItems.AddAsync(item);
                 await context.SaveChangesAsync();
 
-                logger.LogInformation("Test inventory item created: Pallet Jack");
+                logger.LogInformation("Test inventory item created");
+                item.DisplayInfo();
             }
         }
         catch (Exception ex)
@@ -57,12 +59,17 @@ public static class DbSeeder
             // 3. Seed Roles for Identity
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-            string[] roleNames = { "Manager", "User" };
-            foreach (var roleName in roleNames)
+            foreach (var roleName in AppRoles.All)
             {
                 if (!await roleManager.RoleExistsAsync(roleName))
                 {
-                    await roleManager.CreateAsync(new IdentityRole(roleName));
+                    var result = await roleManager.CreateAsync(new IdentityRole(roleName));
+                    if (!result.Succeeded)
+                    {
+                        throw new InvalidOperationException(
+                            $"Failed to create role '{roleName}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                    }
+
                     logger.LogInformation("Role '{Role}' created", roleName);
                 }
             }
@@ -73,13 +80,17 @@ public static class DbSeeder
             throw;
         }
 
+        if (!seedAdminFromEnvironment)
+        {
+            return;
+        }
+
         try
         {
-            // 4. Seed default admin user from environment variables
+            // 4. Seed default admin user from environment variables, when provided.
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var config = scope.ServiceProvider.GetRequiredService<AppConfig>();
 
-            // Check if any admin users exist
             if (!await userManager.Users.AnyAsync())
             {
                 var adminEmail = config.AdminEmail;
@@ -87,7 +98,8 @@ public static class DbSeeder
 
                 if (string.IsNullOrWhiteSpace(adminEmail) || string.IsNullOrWhiteSpace(adminPassword))
                 {
-                    logger.LogWarning("Admin credentials not configured in environment. Run admin user creation command to create one.");
+                    logger.LogWarning(
+                        "Admin credentials are not configured. Run dotnet run -- create-admin to create one interactively.");
                 }
                 else
                 {
@@ -100,7 +112,7 @@ public static class DbSeeder
                     var result = await userManager.CreateAsync(admin, adminPassword);
                     if (result.Succeeded)
                     {
-                        await userManager.AddToRoleAsync(admin, "Manager");
+                        await userManager.AddToRoleAsync(admin, AppRoles.Manager);
                         logger.LogInformation("Default admin user created: {Email}", adminEmail);
                     }
                     else

@@ -50,7 +50,7 @@ public class InventoryController : ControllerBase
 
     [HttpDelete("{id}")]
     // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
     public async Task<IActionResult> Delete(int id)
     {
         var deleted = await _service.DeleteAsync(id);
@@ -65,7 +65,7 @@ public class InventoryController : ControllerBase
 
     [HttpPut("{id}")]
     // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
     public async Task<ActionResult<InventoryItemDto>> Update(int id, [FromBody] UpdateInventoryItemDto dto)
     {
         var updatedItem = await _service.UpdateAsync(id, dto);

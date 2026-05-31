@@ -22,7 +22,7 @@ public class InventoryService : IInventoryService
     public async Task<IEnumerable<InventoryItemDto>> GetAllAsync()
     {
         // 1. Try to get the list from the in-memory cache first
-        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
+        var cacheKey = CacheConstants.GetKey(CacheConstants.CacheKey.InventoryList);
         if (!_cache.TryGetValue(cacheKey, out IEnumerable<InventoryItemDto>? cachedList))
         {
             // 2. If not in cache, query the database using the repository
@@ -40,7 +40,7 @@ public class InventoryService : IInventoryService
             }).ToList();
 
             // 3. Store the result in cache with TTL
-            _cache.Set(cacheKey, cachedList, CacheTtl.InventoryListTtl);
+            _cache.Set(cacheKey, cachedList, CacheConstants.GetDuration(CacheConstants.CacheTtl.List));
         }
 
         return cachedList!;
@@ -48,11 +48,17 @@ public class InventoryService : IInventoryService
 
     public async Task<InventoryItemDto?> GetByIdAsync(int id)
     {
+        var cacheKey = CacheConstants.GetKey(CacheConstants.CacheKey.InventoryItem, id);
+        if (_cache.TryGetValue(cacheKey, out InventoryItemDto? cachedItem))
+        {
+            return cachedItem;
+        }
+
         var item = await _repository.FindByIdAsync(id);
 
         if (item == null) return null;
 
-        return new InventoryItemDto
+        var itemDto = new InventoryItemDto
         {
             ItemId = item.ItemId,
             Name = item.Name,
@@ -60,6 +66,10 @@ public class InventoryService : IInventoryService
             Location = item.Location,
             OrderId = item.OrderId
         };
+
+        _cache.Set(cacheKey, itemDto, CacheConstants.GetDuration(CacheConstants.CacheTtl.Detail));
+
+        return itemDto;
     }
 
     public async Task<InventoryItemDto> CreateAsync(CreateInventoryItemDto dto)
@@ -74,9 +84,10 @@ public class InventoryService : IInventoryService
         await _repository.AddAsync(entity);
         await _repository.SaveAsync();
 
-        // Invalidate cache since we added a new item
-        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
-        _cache.Remove(cacheKey);
+        // Print item details when a new inventory item is created.
+        entity.DisplayInfo();
+
+        InvalidateInventoryCache(entity.ItemId);
 
         return new InventoryItemDto
         {
@@ -97,9 +108,7 @@ public class InventoryService : IInventoryService
         _repository.Delete(entity);
         await _repository.SaveAsync();
 
-        // Invalidate cache
-        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
-        _cache.Remove(cacheKey);
+        InvalidateInventoryCache(entity.ItemId);
 
         return true;
     }
@@ -123,9 +132,10 @@ public class InventoryService : IInventoryService
         _repository.Update(entity);
         await _repository.SaveAsync();
 
-        // Invalidate cache
-        var cacheKey = CacheKeys.GetKeyString(CacheKeys.CacheKeyType.InventoryList);
-        _cache.Remove(cacheKey);
+        // Print item details when an inventory item is updated.
+        entity.DisplayInfo();
+
+        InvalidateInventoryCache(entity.ItemId);
 
         return new InventoryItemDto
         {
@@ -135,5 +145,11 @@ public class InventoryService : IInventoryService
             Location = entity.Location,
             OrderId = entity.OrderId
         };
+    }
+
+    private void InvalidateInventoryCache(int itemId)
+    {
+        _cache.Remove(CacheConstants.GetKey(CacheConstants.CacheKey.InventoryList));
+        _cache.Remove(CacheConstants.GetKey(CacheConstants.CacheKey.InventoryItem, itemId));
     }
 }
