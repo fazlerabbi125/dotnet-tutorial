@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using TutorialProj.Constants;
+using TutorialProj.Common;
 using TutorialProj.Models;
 
 namespace TutorialProj.Data;
@@ -44,8 +44,8 @@ public static class DbSeeder
                 await context.InventoryItems.AddAsync(item);
                 await context.SaveChangesAsync();
 
-                logger.LogInformation("Test inventory item created");
-                item.DisplayInfo();
+                logger.LogInformation("Test inventory item created: {ItemName} (Qty: {Quantity}, Location: {Location})",
+                    item.Name, item.Quantity, item.Location);
             }
         }
         catch (Exception ex)
@@ -59,7 +59,7 @@ public static class DbSeeder
             // 3. Seed Roles for Identity
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-            foreach (var roleName in AppRoles.All)
+            foreach (var roleName in UserRoles.All)
             {
                 if (!await roleManager.RoleExistsAsync(roleName))
                 {
@@ -91,7 +91,9 @@ public static class DbSeeder
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var config = scope.ServiceProvider.GetRequiredService<AppConfig>();
 
-            if (!await userManager.Users.AnyAsync())
+            // Re-seed when no admin exists, regardless of whether other users have been created.
+            var existingAdmins = await userManager.GetUsersInRoleAsync(UserRoles.Admin);
+            if (existingAdmins.Count == 0)
             {
                 var adminEmail = config.AdminEmail;
                 var adminPassword = config.AdminPassword;
@@ -112,7 +114,7 @@ public static class DbSeeder
                     var result = await userManager.CreateAsync(admin, adminPassword);
                     if (result.Succeeded)
                     {
-                        await userManager.AddToRoleAsync(admin, AppRoles.Manager);
+                        await userManager.AddToRoleAsync(admin, UserRoles.Admin);
                         logger.LogInformation("Default admin user created: {Email}", adminEmail);
                     }
                     else

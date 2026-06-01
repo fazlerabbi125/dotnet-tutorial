@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TutorialProj.Common;
 using TutorialProj.Dtos.Orders;
 
 namespace TutorialProj.Services.Orders;
@@ -46,8 +47,8 @@ public class OrderController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
+    // Ensures only authenticated users with the "admin" role can access this endpoint
+    [Authorize(Roles = UserRoles.Admin)]
     public async Task<IActionResult> Delete(int id)
     {
         var deleted = await _service.DeleteAsync(id);
@@ -61,8 +62,8 @@ public class OrderController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
+    // Ensures only authenticated users with the "admin" role can access this endpoint
+    [Authorize(Roles = UserRoles.Admin)]
     public async Task<ActionResult<OrderDetailDto>> Update(int id, [FromBody] UpdateOrderDto dto)
     {
         var updatedOrder = await _service.UpdateAsync(id, dto);

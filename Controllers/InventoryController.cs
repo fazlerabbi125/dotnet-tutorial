@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TutorialProj.Common;
 using TutorialProj.Dtos.Inventory;
 
 namespace TutorialProj.Services.Inventory;
@@ -49,8 +50,8 @@ public class InventoryController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
+    // Ensures only authenticated users with the "admin" role can access this endpoint
+    [Authorize(Roles = UserRoles.Admin)]
     public async Task<IActionResult> Delete(int id)
     {
         var deleted = await _service.DeleteAsync(id);
@@ -64,8 +65,8 @@ public class InventoryController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    // Ensures only authenticated users with the "Manager" role can access this endpoint
-    [Authorize(Roles = TutorialProj.Constants.AppRoles.Manager)]
+    // Ensures only authenticated users with the "admin" role can access this endpoint
+    [Authorize(Roles = UserRoles.Admin)]
     public async Task<ActionResult<InventoryItemDto>> Update(int id, [FromBody] UpdateInventoryItemDto dto)
     {
         var updatedItem = await _service.UpdateAsync(id, dto);

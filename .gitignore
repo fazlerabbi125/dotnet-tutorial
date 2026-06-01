@@ -56,3 +56,4 @@ nunit-*.xml
 !.env.example
 *.sqlite3
 *.db
+bin

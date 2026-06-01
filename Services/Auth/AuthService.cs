@@ -2,11 +2,11 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TutorialProj.Dtos.Auth;
+using TutorialProj.Exceptions;
 using TutorialProj.Models;
-using TutorialProj.Constants;
+using TutorialProj.Common;
 
 namespace TutorialProj.Services.Auth;
 
@@ -38,12 +38,8 @@ public class AuthService : IAuthService
 
         if (result.Succeeded)
         {
-            // If this is the first user ever registered, make them a Manager.
-            // Otherwise, make them a regular User.
-            var userCount = await _userManager.Users.CountAsync();
-            var role = userCount <= 1 ? AppRoles.Manager : AppRoles.User;
-
-            await _userManager.AddToRoleAsync(user, role);
+            // All registered users get the User role. Admin users must be created via CreateAdminUserCommand.
+            await _userManager.AddToRoleAsync(user, UserRoles.User);
         }
 
         return result;
@@ -54,7 +50,13 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByEmailAsync(dto.Email);
         if (user == null) return null;
 
-        var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, false);
+        var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, lockoutOnFailure: true);
+        if (result.IsLockedOut)
+        {
+            throw new ApiException(
+                "Account locked due to too many failed attempts. Try again later.",
+                StatusCodes.Status423Locked);
+        }
         if (!result.Succeeded) return null;
 
         var roles = await _userManager.GetRolesAsync(user);
@@ -63,9 +65,7 @@ public class AuthService : IAuthService
         // https://learn.microsoft.com/en-us/aspnet/core/security/authentication/jwt-authn
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Name, user.UserName ?? "unknown"),
-            new Claim(ClaimTypes.Email, user.Email ?? "unknown")
+            new Claim(ClaimTypes.NameIdentifier, user.Id)
         };
 
         foreach (var role in roles)

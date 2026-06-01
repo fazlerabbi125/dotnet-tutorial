@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Identity;
-using TutorialProj.Constants;
+using TutorialProj.Common;
 using TutorialProj.Models;
 
 namespace TutorialProj.Commands;
@@ -42,12 +42,12 @@ public class CreateAdminUserCommand
 
         var password = GetValidatedPassword();
 
-        if (!await _roleManager.RoleExistsAsync(AppRoles.Manager))
+        if (!await _roleManager.RoleExistsAsync(UserRoles.Admin))
         {
-            var roleResult = await _roleManager.CreateAsync(new IdentityRole(AppRoles.Manager));
+            var roleResult = await _roleManager.CreateAsync(new IdentityRole(UserRoles.Admin));
             if (!roleResult.Succeeded)
             {
-                PrintIdentityErrors("Failed to create Manager role", roleResult);
+                PrintIdentityErrors("Failed to create Admin role", roleResult);
                 return;
             }
         }
@@ -66,17 +66,17 @@ public class CreateAdminUserCommand
             return;
         }
 
-        var addRoleResult = await _userManager.AddToRoleAsync(adminUser, AppRoles.Manager);
+        var addRoleResult = await _userManager.AddToRoleAsync(adminUser, UserRoles.Admin);
 
         if (!addRoleResult.Succeeded)
         {
-            PrintIdentityErrors("Failed to assign Manager role", addRoleResult);
+            PrintIdentityErrors("Failed to assign Admin role", addRoleResult);
             return;
         }
 
         Console.WriteLine("Admin user created successfully!");
         Console.WriteLine($"   Email: {email}");
-        Console.WriteLine($"   Role: {AppRoles.Manager}\n");
+        Console.WriteLine($"   Role: {UserRoles.Admin}\n");
         _logger.LogInformation("Admin user created: {Email}", email);
     }
 
@@ -115,7 +115,7 @@ public class CreateAdminUserCommand
         while (true)
         {
             Console.Write("Enter password (min 6 characters): ");
-            var password = Console.ReadLine();
+            var password = ReadPassword();
 
             if (string.IsNullOrWhiteSpace(password))
             {
@@ -136,7 +136,7 @@ public class CreateAdminUserCommand
             }
 
             Console.Write("Confirm password: ");
-            var confirmPassword = Console.ReadLine();
+            var confirmPassword = ReadPassword();
 
             if (password != confirmPassword)
             {
@@ -145,6 +145,37 @@ public class CreateAdminUserCommand
             }
 
             return password;
+        }
+    }
+
+    /// <summary>
+    /// Reads a password from the console without echoing characters. Echoes '*' per keypress
+    /// and supports Backspace.
+    /// </summary>
+    private static string ReadPassword()
+    {
+        var buffer = new System.Text.StringBuilder();
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                return buffer.ToString();
+            }
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (buffer.Length > 0)
+                {
+                    buffer.Length--;
+                    Console.Write("\b \b");
+                }
+                continue;
+            }
+            if (char.IsControl(key.KeyChar)) continue;
+
+            buffer.Append(key.KeyChar);
+            Console.Write('*');
         }
     }
 

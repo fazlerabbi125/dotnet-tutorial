@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
-using TutorialProj.Constants;
+using TutorialProj.Common;
 using TutorialProj.Dtos.Inventory;
 using TutorialProj.Models;
 using TutorialProj.Repositories.Interfaces;
@@ -10,13 +10,15 @@ public class InventoryService : IInventoryService
 {
     private readonly IInventoryRepository _repository;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<InventoryService> _logger;
 
-    // Dependency Injection (DI) passes the repository and cache to the service.
+    // Dependency Injection (DI) passes the repository, cache, and logger to the service.
     // https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection
-    public InventoryService(IInventoryRepository repository, IMemoryCache cache)
+    public InventoryService(IInventoryRepository repository, IMemoryCache cache, ILogger<InventoryService> logger)
     {
         _repository = repository;
         _cache = cache;
+        _logger = logger;
     }
 
     public async Task<IEnumerable<InventoryItemDto>> GetAllAsync()
@@ -84,8 +86,7 @@ public class InventoryService : IInventoryService
         await _repository.AddAsync(entity);
         await _repository.SaveAsync();
 
-        // Print item details when a new inventory item is created.
-        entity.DisplayInfo();
+        _logger.LogInformation("Inventory item created: {ItemId} - {Name} (Qty: {Quantity})", entity.ItemId, entity.Name, entity.Quantity);
 
         InvalidateInventoryCache(entity.ItemId);
 
@@ -129,11 +130,10 @@ public class InventoryService : IInventoryService
         if (dto.Location != null)
             entity.Location = dto.Location;
 
-        _repository.Update(entity);
+        // Entity is tracked from FindByIdAsync; SaveAsync persists property mutations.
         await _repository.SaveAsync();
 
-        // Print item details when an inventory item is updated.
-        entity.DisplayInfo();
+        _logger.LogInformation("Inventory item updated: {ItemId} - {Name} (Qty: {Quantity})", entity.ItemId, entity.Name, entity.Quantity);
 
         InvalidateInventoryCache(entity.ItemId);
 
@@ -149,7 +149,9 @@ public class InventoryService : IInventoryService
 
     private void InvalidateInventoryCache(int itemId)
     {
+        // Invalidate both the list cache and the specific item cache
         _cache.Remove(CacheConstants.GetKey(CacheConstants.CacheKey.InventoryList));
         _cache.Remove(CacheConstants.GetKey(CacheConstants.CacheKey.InventoryItem, itemId));
+        _logger.LogDebug("Inventory cache invalidated for item {ItemId}", itemId);
     }
 }

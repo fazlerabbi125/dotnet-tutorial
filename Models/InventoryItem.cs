@@ -32,6 +32,7 @@ public class InventoryItem : TimeStampMixin
     // [ForeignKey("OrderId")] // Explicitly specify the foreign key relationship. Not needed if name of the foreign key property is <NavigationPropertyName>Id (like OrderId) which EF Core can conventionally recognize.
     public Order? Order { get; set; }
 
+    [Obsolete("Use ILogger for logging instead. This method has been replaced with structured logging in service layer.", false)]
     public void DisplayInfo()
     {
         Console.WriteLine(

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using TutorialProj.Constants;
+using TutorialProj.Common;
 using TutorialProj.Dtos.Inventory;
 using TutorialProj.Dtos.Orders;
 using TutorialProj.Models;
@@ -12,11 +12,13 @@ public class OrderService : IOrderService
 {
     private readonly IOrderRepository _repository;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<OrderService> _logger;
 
-    public OrderService(IOrderRepository repository, IMemoryCache cache)
+    public OrderService(IOrderRepository repository, IMemoryCache cache, ILogger<OrderService> logger)
     {
         _repository = repository;
         _cache = cache;
+        _logger = logger;
     }
 
     public async Task<IEnumerable<OrderSummaryDto>> GetAllAsync()
@@ -91,10 +93,8 @@ public class OrderService : IOrderService
         await _repository.AddAsync(order);
         await _repository.SaveAsync();
 
-        foreach (var item in order.Items)
-        {
-            item.DisplayInfo();
-        }
+        _logger.LogInformation("Order created: {OrderId} for customer {CustomerName} with {ItemCount} items", 
+            order.OrderId, order.CustomerName, order.Items.Count);
 
         InvalidateOrderCache(order.OrderId);
         InvalidateInventoryListCache();
@@ -104,10 +104,14 @@ public class OrderService : IOrderService
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var order = await _repository.FindByIdAsync(id);
+        // Load with items so we can clear the FK refs before delete. The relationship is
+        // configured with DeleteBehavior.Restrict, so a bare Delete would crash on FK constraint
+        // for any order that has items attached.
+        var order = await _repository.FindWithItemsAsync(id);
 
         if (order == null) return false;
 
+        order.Items.Clear();
         _repository.Delete(order);
         await _repository.SaveAsync();
 
@@ -130,15 +134,13 @@ public class OrderService : IOrderService
         if (dto.DatePlaced.HasValue)
             order.DatePlaced = dto.DatePlaced.Value;
 
-        _repository.Update(order);
+        // Entity is tracked from FindWithItemsAsync; SaveAsync persists property mutations.
         await _repository.SaveAsync();
 
-        foreach (var item in order.Items)
-        {
-            item.DisplayInfo();
-        }
+        _logger.LogInformation("Order updated: {OrderId} for customer {CustomerName}", order.OrderId, order.CustomerName);
 
         InvalidateOrderCache(order.OrderId);
+        InvalidateInventoryListCache();
 
         return MapOrderDetail(order);
     }

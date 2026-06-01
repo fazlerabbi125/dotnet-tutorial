@@ -1,14 +1,14 @@
-namespace TutorialProj.Constants;
+namespace TutorialProj.Common;
 
 /// <summary>
-/// Shared application constants used across authentication, authorization, and seeding.
+/// Application roles for authorization.
 /// </summary>
-public static class AppRoles
+public static class UserRoles
 {
-    public const string Manager = "Manager";
-    public const string User = "User";
+    public const string Admin = "admin";
+    public const string User = "user";
 
-    public static readonly string[] All = [Manager, User];
+    public static readonly string[] All = [Admin, User];
 }
 
 public static class AppCommands
@@ -44,7 +44,8 @@ public static class CacheConstants
     {
         CacheKey.InventoryItem => $"inventory:item:{id}",
         CacheKey.Order => $"orders:item:{id}",
-        _ => GetKey(key)
+        _ => throw new ArgumentException(
+            $"Cache key '{key}' does not accept an identifier; use GetKey(CacheKey) instead.")
     };
 
     public static TimeSpan GetDuration(CacheTtl ttl) => ttl switch

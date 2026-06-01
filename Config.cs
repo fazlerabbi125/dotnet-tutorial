@@ -12,7 +12,12 @@ public sealed class AppConfig
         DbConnectionString = GetRequired("DB_CONNECTION_STRING");
         JwtSecret = GetRequired("JWT_SECRET");
 
-        Env = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+        // HMAC-SHA256 requires a key of at least 256 bits (32 ASCII characters).
+        if (JwtSecret.Length < 32)
+            throw new InvalidOperationException(
+                "JWT_SECRET must be at least 32 characters (256 bits) for HMAC-SHA256.");
+
+        Env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
             ?? "Development";
 
         JwtExpiryInMinutes = GetOptionalInt("JWT_EXPIRY_MINUTES", 60);
@@ -22,7 +27,7 @@ public sealed class AppConfig
 
     private static string GetRequired(string key)
     {
-        var value = System.Environment.GetEnvironmentVariable(key);
+        var value = Environment.GetEnvironmentVariable(key);
 
         if (string.IsNullOrWhiteSpace(value))
             throw new InvalidOperationException(
@@ -33,12 +38,12 @@ public sealed class AppConfig
 
     private static string? GetOptional(string key)
     {
-        return System.Environment.GetEnvironmentVariable(key);
+        return Environment.GetEnvironmentVariable(key);
     }
 
     private static int GetOptionalInt(string key, int defaultValue)
     {
-        var value = System.Environment.GetEnvironmentVariable(key);
+        var value = Environment.GetEnvironmentVariable(key);
 
         return int.TryParse(value, out var result)
             ? result

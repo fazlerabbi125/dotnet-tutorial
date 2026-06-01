@@ -13,6 +13,6 @@ public class UpdateInventoryItemDto
     [Range(0, int.MaxValue, ErrorMessage = "Quantity cannot be negative.")]
     public int? Quantity { get; set; }
 
-    [StringLength(100, ErrorMessage = "Location must not exceed 100 characters.")]
+    [StringLength(100, MinimumLength = 1, ErrorMessage = "Location must be between 1 and 100 characters.")]
     public string? Location { get; set; }
 }
