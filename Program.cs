@@ -57,10 +57,13 @@ builder.Services.Replace(
 Serialization (response output): C# Name → JSON "name"
 Deserialization (request input): JSON "name" → C# Name
 */
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-});
+// For Minimal APIs
+// builder.Services.ConfigureHttpJsonOptions(options =>
+// {
+//     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+// });
+
+// MVC controllers
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;

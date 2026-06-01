@@ -10,6 +10,8 @@ Use NuGet for installing packages
 
 A project can only have one file with top-level statements.
 
+Use dotnet watch to run project with hot reload (similar to npm run dev) and dotnet run to run project with no reload on changes (similar to npm start)
+
 Both file-scoped namespace (single-line statement) and block-scoped namespace (scopes code to its curly braces) can be used within a project, but not within the same file. It is recommended to use file-scoped namespaces from .NET 10 for clean, readable code because it is exceptionally rare to declare more than one namespace per file in modern programming. You should only use block-scoped syntax if you explicitly intend to host multiple unrelated namespaces within the exact same file.
 
 ## Concepts & Official Docs
